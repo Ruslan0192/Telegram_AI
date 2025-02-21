@@ -1,11 +1,7 @@
 import asyncio
-import json
-import os
-
 from aiogram import Bot, Dispatcher
 
 from router.user import user_router
-
 import config
 
 

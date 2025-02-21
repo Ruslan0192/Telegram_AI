@@ -9,4 +9,3 @@ class Settings(BaseSettings):
 
 # Получаем параметры для загрузки переменных среды
 settings = Settings()
-
