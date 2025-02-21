@@ -1,4 +1,4 @@
 .env
-.gitignore
 /venv/
 /.idea/
+/voice_tmp/
