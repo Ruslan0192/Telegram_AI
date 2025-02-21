@@ -28,14 +28,14 @@ async def def_get_audio(message: types.Message, bot: Bot):
 
     # отправляю на преобразование ИИ голоса из файла в текст
     question = def_openai_api_voice_in_text(file_on_disk)
-    # await message.reply(question)
+    await message.reply(question)
 
     # удаляю голосовой файл
     os.remove(file_on_disk)
 
     # вопрос для ИИ
     answer = await def_openai_api_question(question)
-    # await message.answer(answer)
+    await message.answer(answer)
 
     # отправляю на преобразование ИИ из текста в файл голосом
     file_on_disk = def_openai_api_text_in_voice(answer, message.from_user.id)
