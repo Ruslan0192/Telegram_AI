@@ -23,6 +23,8 @@ async def def_get_audio(message: types.Message, bot: Bot):
     file_id = message.voice.file_id
     file = await bot.get_file(file_id)
     file_path = file.file_path
+    if not os.path.exists('voice_tmp'):
+        os.mkdir('voice_tmp')
     file_on_disk = f'voice_tmp\{file_id}.wav'
     await bot.download_file(file_path, destination=file_on_disk)
 
