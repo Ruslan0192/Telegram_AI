@@ -1,4 +1,4 @@
-from pathlib import Path
+# from pathlib import Path
 
 import config
 
@@ -27,7 +27,8 @@ def def_openai_api_text_in_voice(text: str, user_id):
         voice="alloy",
         input=text,
     )
-    file_on_disk = Path("voice_tmp", f"output_for_{user_id}.wav")  # user_id для создания уникального имени файла
+    # file_on_disk = Path("voice_tmp", f"output_for_{user_id}.wav")  этот вариант не работает с python 3.12 на сервере
+    file_on_disk = f'voice_tmp\output_for_{user_id}.wav'  # user_id для создания уникального имени файла
     # запись на диск
     response.write_to_file(file_on_disk)
     return file_on_disk
