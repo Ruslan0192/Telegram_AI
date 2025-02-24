@@ -57,8 +57,18 @@ async def def_get_audio(message: types.Message, bot: Bot, state: FSMContext):
 
     # забираю id по ассистенту ИИ и процессу
     state_data = await state.get_data()
-    assistant_id = state_data['assistant_id']
-    thread_id = state_data['thread_id']
+    if 'assistant_id' in state_data:
+        assistant_id = state_data['assistant_id']
+        thread_id = state_data['thread_id']
+    else:
+        # если запуск бота был до обновления версии
+        # создаю ассистента и процесс для данного пользователя
+        assistant, thread = await def_create_assistant()
+        # помещаю в state  для доступа в других обработчиках
+        await state.set_data({'assistant_id': assistant.id})
+        await state.update_data({'thread_id': thread.id})
+        assistant_id = assistant.id
+        thread_id = thread.id
 
     # отправляю вопрос
     answer = await def_openai_api_question(assistant_id, thread_id, question)
