@@ -2,6 +2,7 @@ import os
 
 from aiogram import F, types, Router, Bot
 from aiogram.filters import CommandStart
+from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile
 
 from open_ai_api.transcription import \
@@ -14,14 +15,20 @@ user_router = Router()
 
 
 @user_router.message(CommandStart())
-async def start_cmd(message: types.Message):
+async def start_cmd(message: types.Message, state: FSMContext):
     await message.answer(f'Привет {message.from_user.first_name}!\n'
                          f'Вас приветствует голосовой помощник!\n'
                          f'Запишите вопрос в голосовом сообщении!')
 
+    # создаю ассистента и процесс для данного пользователя
+    assistant, thread = await def_create_assistant()
+    # помещаю в state  для доступа в других обработчиках
+    await state.set_data({'assistant_id': assistant.id})
+    await state.update_data({'thread_id': thread.id})
+
 
 @user_router.message(F.voice)
-async def def_get_audio(message: types.Message, bot: Bot):
+async def def_get_audio(message: types.Message, bot: Bot, state: FSMContext):
     # сообщение об ожидании
     message_wait = await message.answer('Ожидайте ответ...')
 
@@ -47,10 +54,14 @@ async def def_get_audio(message: types.Message, bot: Bot):
 # вопрос для ИИ
     # сообщение об ожидании
     message_wait = await message.answer('Ожидайте ответ...')
-    # создаю ассистента и процесс
-    assistant, thread = await def_create_assistant()
+
+    # забираю id по ассистенту ИИ и процессу
+    state_data = await state.get_data()
+    assistant_id = state_data['assistant_id']
+    thread_id = state_data['thread_id']
+
     # отправляю вопрос
-    answer = await def_openai_api_question(assistant, thread, question)
+    answer = await def_openai_api_question(assistant_id, thread_id, question)
     # удаляю сообщение об ожидании
     await message_wait.delete()
     # ответ ИИ
@@ -61,7 +72,6 @@ async def def_get_audio(message: types.Message, bot: Bot):
     message_wait = await message.answer('Ожидайте ответ...')
 
     file_on_disk = await def_openai_api_text_in_voice(answer, message.from_user.id)
-
     # записываю файл на диск
     audio_file = FSInputFile(file_on_disk, "Ответ ИИ.wav")
     # удаляю сообщение об ожидании

@@ -37,7 +37,7 @@ async def def_create_assistant():
 
 
 # ожидание ответа
-async def def_get_answer(assistant_id, thread_id):
+async def def_get_answer(assistant_id: any, thread_id: any):
     # запуск ассистента
     run = await client_async.beta.threads.runs.create(
         thread_id=thread_id,
@@ -59,15 +59,15 @@ async def def_get_answer(assistant_id, thread_id):
 
 
 # ИИ отвечает на вопрос
-async def def_openai_api_question(assistant, thread, question: str):
+async def def_openai_api_question(assistant_id: any, thread_id: any, question: str):
     # добавляю вопрос в процесс
     await client_async.beta.threads.messages.create(
-        thread_id=thread.id,
+        thread_id=thread_id,
         role="user",
         content=question
     )
     # ожидание ответа
-    message_content = await def_get_answer(assistant.id, thread.id)
+    message_content = await def_get_answer(assistant_id, thread_id)
     return message_content
 
 
