@@ -1,7 +1,7 @@
 import os
 
 from aiogram import F, types, Router, Bot
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile
 
@@ -14,13 +14,13 @@ from open_ai_api.transcription import \
 user_router = Router()
 
 
-class Assistant:
-    def __init__(self, assistant, thread):
-        self.id = assistant.id
-        self.thread_id = thread.id
-
-    def __call__(self):
-        return self.id, self.thread_id
+# class Assistant:
+#     def __init__(self, assistant_id, thread_id):
+#         self.id = assistant_id
+#         self.thread_id = thread_id
+#
+#     def __call__(self):
+#         return self.id, self.thread_id
 
 
 @user_router.message(CommandStart())
@@ -30,10 +30,12 @@ async def start_cmd(message: types.Message, state: FSMContext):
                          f'Запишите вопрос в голосовом сообщении!')
 
     # создаю ассистента и процесс для данного пользователя
-    assistant, thread = await def_create_assistant()
-    assistant = Assistant(assistant, thread)
-    # помещаю класс в state  для доступа в других обработчиках
-    await state.set_data({'assistant': assistant})
+    assistant_id, thread_id = await def_create_assistant()
+    # assistant_current = Assistant(assistant_id, thread_id)  класс убрал поскольку redis не может сохранять списки
+
+    # помещаю в state  для доступа в других обработчиках
+    await state.set_data({'assistant_id': assistant_id})
+    await state.update_data({'thread_id': thread_id})
 
 
 @user_router.message(F.voice)
@@ -66,17 +68,17 @@ async def def_get_audio(message: types.Message, bot: Bot, state: FSMContext):
 
     # забираю id по ассистенту ИИ и процессу
     state_data = await state.get_data()
-    if 'assistant' in state_data:
-        assistant_id = state_data['assistant'].id
-        thread_id = state_data['assistant'].thread_id
+    if state_data:
+        assistant_id = state_data['assistant_id']
+        thread_id = state_data['thread_id']
     else:
-        # если запуск бота был до обновления версии или был перезапуск сервера
+        # если запуск бота был до обновления версии
         # создаю ассистента и процесс для данного пользователя
-        assistant, thread = await def_create_assistant()
-        assistant = Assistant(assistant, thread)
-        await state.set_data({'assistant': assistant})
-        assistant_id = assistant.id
-        thread_id = thread.id
+        assistant_id, thread_id = await def_create_assistant()
+        # assistant_current = Assistant(assistant_id, thread_id)
+        # помещаю в state  для доступа в других обработчиках
+        await state.set_data({'assistant_id': assistant_id})
+        await state.update_data({'thread_id': thread_id})
 
     # отправляю вопрос
     answer = await def_openai_api_question(assistant_id, thread_id, question)
@@ -98,6 +100,25 @@ async def def_get_audio(message: types.Message, bot: Bot, state: FSMContext):
     await message.answer_voice(audio_file)
     # удаляю голосовой файл
     os.remove(file_on_disk)
+
+
+@user_router.message(Command('new_dialog'))
+async def start_cmd(message: types.Message, state: FSMContext):
+    assistant_id, thread_id = await def_create_assistant()
+    # помещаю в state  для доступа в других обработчиках
+    await state.set_data({'assistant_id': assistant_id})
+    await state.update_data({'thread_id': thread_id})
+
+    await message.answer('Открыта новая тема!\n'
+                         'Запишите вопрос в голосовом сообщении!')
+
+
+@user_router.message(Command('about'))
+async def start_cmd(message: types.Message):
+    await message.answer('Чат-бот на Aiogram, способен принимать голосовые сообщения, '
+                         'преобразовывать их в текст, получать ответы на заданные вопросы и '
+                         'озвучивать ответы обратно пользователю с использованием асинхронного '
+                         'клиента OpenAI API.')
 
 
 @user_router.message()

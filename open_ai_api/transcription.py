@@ -17,9 +17,6 @@ async def def_openai_api_voice_in_text(audio_filename: str):
         transcript = await client_async.audio.transcriptions.create(
             model="whisper-1",
             file=audio_file,
-            # temperature=0.5,
-            # response_format="verbose_json"
-            # language='ru'
         )
     return transcript.text
 
@@ -33,7 +30,7 @@ async def def_create_assistant():
         tools=[{"type": "code_interpreter"}],
     )
     thread = await client_async.beta.threads.create()
-    return assistant, thread
+    return assistant.id, thread.id
 
 
 # ожидание ответа
@@ -46,8 +43,8 @@ async def def_get_answer(assistant_id: any, thread_id: any):
 
     # # ожидание ответа
     while True:
-        runInfo = await client_async.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
-        if runInfo.completed_at:
+        run_info = await client_async.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
+        if run_info.completed_at:
             break
         # запрос ответа через каждые 0,5 сек
         time.sleep(0.5)
