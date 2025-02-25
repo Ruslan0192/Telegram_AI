@@ -103,7 +103,7 @@ async def def_get_audio(message: types.Message, bot: Bot, state: FSMContext):
 
 
 @user_router.message(Command('new_dialog'))
-async def start_cmd(message: types.Message, state: FSMContext):
+async def new_dialog_cmd(message: types.Message, state: FSMContext):
     assistant_id, thread_id = await def_create_assistant()
     # помещаю в state  для доступа в других обработчиках
     await state.set_data({'assistant_id': assistant_id})
@@ -114,7 +114,7 @@ async def start_cmd(message: types.Message, state: FSMContext):
 
 
 @user_router.message(Command('about'))
-async def start_cmd(message: types.Message):
+async def about_cmd(message: types.Message):
     await message.answer('Чат-бот на Aiogram, способен принимать голосовые сообщения, '
                          'преобразовывать их в текст, получать ответы на заданные вопросы и '
                          'озвучивать ответы обратно пользователю с использованием асинхронного '
