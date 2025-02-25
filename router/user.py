@@ -14,6 +14,15 @@ from open_ai_api.transcription import \
 user_router = Router()
 
 
+class Assistant:
+    def __init__(self, assistant, thread):
+        self.id = assistant.id
+        self.thread_id = thread.id
+
+    def __call__(self):
+        return self.id, self.thread_id
+
+
 @user_router.message(CommandStart())
 async def start_cmd(message: types.Message, state: FSMContext):
     await message.answer(f'Привет {message.from_user.first_name}!\n'
@@ -22,9 +31,9 @@ async def start_cmd(message: types.Message, state: FSMContext):
 
     # создаю ассистента и процесс для данного пользователя
     assistant, thread = await def_create_assistant()
-    # помещаю в state  для доступа в других обработчиках
-    await state.set_data({'assistant_id': assistant.id})
-    await state.update_data({'thread_id': thread.id})
+    assistant = Assistant(assistant, thread)
+    # помещаю класс в state  для доступа в других обработчиках
+    await state.set_data({'assistant': assistant})
 
 
 @user_router.message(F.voice)
@@ -57,16 +66,15 @@ async def def_get_audio(message: types.Message, bot: Bot, state: FSMContext):
 
     # забираю id по ассистенту ИИ и процессу
     state_data = await state.get_data()
-    if 'assistant_id' in state_data:
-        assistant_id = state_data['assistant_id']
-        thread_id = state_data['thread_id']
+    if 'assistant' in state_data:
+        assistant_id = state_data['assistant'].id
+        thread_id = state_data['assistant'].thread_id
     else:
-        # если запуск бота был до обновления версии
+        # если запуск бота был до обновления версии или был перезапуск сервера
         # создаю ассистента и процесс для данного пользователя
         assistant, thread = await def_create_assistant()
-        # помещаю в state  для доступа в других обработчиках
-        await state.set_data({'assistant_id': assistant.id})
-        await state.update_data({'thread_id': thread.id})
+        assistant = Assistant(assistant, thread)
+        await state.set_data({'assistant': assistant})
         assistant_id = assistant.id
         thread_id = thread.id
 
