@@ -1,7 +1,7 @@
 import asyncio
 
 from aiogram import Bot, Dispatcher, types
-# from aiogram.fsm.storage.redis import RedisStorage
+from aiogram.fsm.storage.redis import RedisStorage
 
 from commands.com_menu import private
 
@@ -11,8 +11,8 @@ import config
 
 bot = Bot(config.settings.TOKEN_TG)
 
-# storage = RedisStorage.from_url(config.settings.REDIS_URL)
-# dp = Dispatcher(storage=storage)
+storage = RedisStorage.from_url(config.settings.REDIS_URL)
+dp = Dispatcher(storage=storage)
 
 dp = Dispatcher()
 dp.include_router(user_router)
