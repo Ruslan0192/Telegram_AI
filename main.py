@@ -14,7 +14,7 @@ bot = Bot(config.settings.TOKEN_TG)
 storage = RedisStorage.from_url(config.settings.REDIS_URL)
 dp = Dispatcher(storage=storage)
 
-dp = Dispatcher()
+# dp = Dispatcher()
 dp.include_router(user_router)
 
 
