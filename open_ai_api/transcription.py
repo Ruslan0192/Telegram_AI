@@ -1,4 +1,3 @@
-import time
 from pathlib import Path
 
 import config
@@ -23,36 +22,19 @@ async def def_openai_api_voice_in_text(audio_filename: str):
 
 # Модуль получения ответа от ИИ на вопрос
 # **************************************************************************************
-# создаю ассистента и процесс
+# создаю ассистента
 async def def_create_assistant():
     assistant = await client_async.beta.assistants.create(
         model="gpt-4-1106-preview",
         tools=[{"type": "code_interpreter"}],
     )
-    thread = await client_async.beta.threads.create()
+    thread = await def_create_thread()
     return assistant.id, thread.id
 
 
-# ожидание ответа
-async def def_get_answer(assistant_id: any, thread_id: any):
-    # запуск ассистента
-    run = await client_async.beta.threads.runs.create(
-        thread_id=thread_id,
-        assistant_id=assistant_id
-    )
-
-    # # ожидание ответа
-    while True:
-        run_info = await client_async.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
-        if run_info.completed_at:
-            break
-        # запрос ответа через каждые 0,5 сек
-        time.sleep(0.5)
-
-    # Пришел ответ
-    messages = await client_async.beta.threads.messages.list(thread_id)
-    message_content = messages.data[0].content[0].text.value
-    return message_content
+# создаю процесс
+async def def_create_thread():
+    return await client_async.beta.threads.create()
 
 
 # ИИ отвечает на вопрос
@@ -63,8 +45,11 @@ async def def_openai_api_question(assistant_id: any, thread_id: any, question: s
         role="user",
         content=question
     )
-    # ожидание ответа
-    message_content = await def_get_answer(assistant_id, thread_id)
+    # запуск
+    await client_async.beta.threads.runs.create_and_poll(thread_id=thread_id, assistant_id=assistant_id)
+    # Пришел ответ
+    messages = await client_async.beta.threads.messages.list(thread_id)
+    message_content = messages.data[0].content[0].text.value
     return message_content
 
 

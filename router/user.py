@@ -9,18 +9,10 @@ from open_ai_api.transcription import \
     def_openai_api_voice_in_text, \
     def_openai_api_question, \
     def_openai_api_text_in_voice, \
-    def_create_assistant
+    def_create_assistant, \
+    def_create_thread
 
 user_router = Router()
-
-
-# class Assistant:
-#     def __init__(self, assistant_id, thread_id):
-#         self.id = assistant_id
-#         self.thread_id = thread_id
-#
-#     def __call__(self):
-#         return self.id, self.thread_id
 
 
 @user_router.message(CommandStart())
@@ -31,7 +23,6 @@ async def start_cmd(message: types.Message, state: FSMContext):
 
     # создаю ассистента и процесс для данного пользователя
     assistant_id, thread_id = await def_create_assistant()
-    # assistant_current = Assistant(assistant_id, thread_id)  класс убрал поскольку redis не может сохранять списки
 
     # помещаю в state  для доступа в других обработчиках
     await state.set_data({'assistant_id': assistant_id})
@@ -104,10 +95,9 @@ async def def_get_audio(message: types.Message, bot: Bot, state: FSMContext):
 
 @user_router.message(Command('new_dialog'))
 async def new_dialog_cmd(message: types.Message, state: FSMContext):
-    assistant_id, thread_id = await def_create_assistant()
+    thread_id = await def_create_thread()
     # помещаю в state  для доступа в других обработчиках
-    await state.set_data({'assistant_id': assistant_id})
-    await state.update_data({'thread_id': thread_id})
+    await state.update_data({'thread_id': thread_id.id})
 
     await message.answer('Открыта новая тема!\n'
                          'Запишите вопрос в голосовом сообщении!')
