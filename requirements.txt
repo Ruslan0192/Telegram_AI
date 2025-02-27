@@ -2,3 +2,6 @@ pydantic_settings==2.8.0
 aiogram==3.9.0
 openai==1.63.2
 redis==5.2.1
+sqlalchemy==2.0.36
+psycopg2==2.9.10
+asyncpg==0.30.0
