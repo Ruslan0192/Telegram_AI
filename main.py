@@ -6,7 +6,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 from commands.com_menu import private
 
 from database.middleware import DataBaseSession
-from database.engine import create_db, session_maker, drop_db
+from database.engine import session_maker
 
 from router.user import user_router
 import config
@@ -20,14 +20,6 @@ dp.include_router(user_router)
 
 
 async def on_startup():
-    new_start = config.settings.NEW_DB
-    if new_start:
-        try:
-            await drop_db()
-        except ():
-            print('База отсутствует')
-        await create_db()
-        print('База создана')
     print("Бот успешно запущен!")
 
 
