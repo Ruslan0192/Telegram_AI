@@ -1,4 +1,5 @@
 from pathlib import Path
+from pydantic import BaseModel
 
 import config
 
@@ -38,7 +39,7 @@ async def def_create_thread():
 
 
 # ИИ отвечает на вопрос
-async def def_openai_api_question(assistant_id: any, thread_id: any, question: str):
+async def def_openai_api_question(assistant_id: any, thread_id: any, question: str, characteristic: str):
     # добавляю вопрос в процесс
     await client_async.beta.threads.messages.create(
         thread_id=thread_id,
@@ -46,11 +47,16 @@ async def def_openai_api_question(assistant_id: any, thread_id: any, question: s
         content=question
     )
     # запуск
-    await client_async.beta.threads.runs.create_and_poll(thread_id=thread_id, assistant_id=assistant_id)
+    run = await client_async.beta.threads.runs.create_and_poll(thread_id=thread_id,
+                                                               assistant_id=assistant_id,
+                                                               instructions=characteristic)
+
     # Пришел ответ
-    messages = await client_async.beta.threads.messages.list(thread_id)
-    message_content = messages.data[0].content[0].text.value
-    return message_content
+    if run.completed_at:
+        messages = await client_async.beta.threads.messages.list(thread_id)
+        message_content = messages.data[0].content[0].text.value
+        return message_content
+    return
 
 
 # Модуль преобразования ИИ из текста в файл голосом
@@ -66,3 +72,27 @@ async def def_openai_api_text_in_voice(text: str, user_id):
     # запись на диск
     response.write_to_file(file_on_disk)
     return file_on_disk
+
+
+# class OutText(BaseModel):
+#     output: str
+
+
+async def save_value(content_system: str, content_user: str):
+    completion = await client_async.beta.chat.completions.parse(
+        model="gpt-4o-2024-08-06",
+        messages=[
+            {"role": "system",
+             "content": content_system},
+            {"role": "user",
+             "content": content_user}
+        ],
+        # response_format=OutText,
+    )
+    text_out = completion.choices[0].message
+
+    # проверка соответствия классу
+    if text_out.refusal:
+        return  # для выполнения задания, здесь False
+    else:
+        return text_out.content   # для выполнения задания, здесь True
