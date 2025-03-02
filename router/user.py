@@ -138,7 +138,7 @@ async def def_get_new_char_theme(message: types.Message, bot: Bot, state: FSMCon
     theme = state_data["theme"]
 
     # прописываю шаблонное задание для ИИ
-    content_system = f"Разложи данные по характеристикам для темы {theme}"
+    content_system = f"Помощник, создай instructions for Assistant Open AI для темы {theme} по представленным данным"
 
     # сообщение об ожидании
     message_wait = await message.answer('Ожидайте ответ...')

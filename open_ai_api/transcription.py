@@ -1,5 +1,5 @@
 from pathlib import Path
-from pydantic import BaseModel
+# from pydantic import BaseModel
 
 import config
 
@@ -91,8 +91,7 @@ async def save_value(content_system: str, content_user: str):
     )
     text_out = completion.choices[0].message
 
-    # проверка соответствия классу
+    # проверка отсутствия ошибок
     if text_out.refusal:
         return  # для выполнения задания, здесь False
-    else:
-        return text_out.content   # для выполнения задания, здесь True
+    return text_out.content   # для выполнения задания, здесь True
