@@ -9,7 +9,7 @@ from alembic import context
 
 
 from database.engine import db_url, Base
-from database.models import Theme
+from database.models import User
 
 
 # this is the Alembic Config object, which provides

@@ -4,7 +4,6 @@ from aiogram import F, types, Router, Bot
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile
-from aiogram.fsm.state import State, StatesGroup
 
 from database.orm_query import *
 
@@ -14,29 +13,30 @@ from open_ai_api.transcription import *
 user_router = Router()
 
 
-class Allstate(StatesGroup):
-    # Состояния бота
-    state_new_theme = State()           # новая тема разговора
-    state_new_characteristic = State()  # новая характеристика новой темы
-    state_choice_theme = State()        # выбор темы
-
-
-# проверка запущенного ассистента
-async def def_control_active_assistant(state: FSMContext):
+# проверка запущенного потока
+async def def_control_active_thread(state: FSMContext, session: AsyncSession, telegram_id: int):
     # забираю id по ассистенту ИИ и процессу
     state_data = await state.get_data()
     if state_data:
-        assistant_id = state_data['assistant_id']
         thread_id = state_data['thread_id']
+        characteristic = state_data['characteristic']
     else:
-        # если запуск бота был до обновления версии
-        # создаю ассистента и процесс для данного пользователя
-        assistant_id, thread_id = await def_create_assistant()
-        # assistant_current = Assistant(assistant_id, thread_id)
+        # читаю данные из БД
+        result = await orm_get_user(session, telegram_id)
+
+        if result:
+            thread_id = result.thread_id
+            characteristic = result.characteristic
+        else:
+            # у этого пользователя не было потока
+            # процесс для данного пользователя
+            thread_id = await def_create_thread()
+            characteristic = ''
+
         # помещаю в state  для доступа в других обработчиках
-        await state.set_data({'assistant_id': assistant_id})
-        await state.update_data({'thread_id': thread_id})
-    return assistant_id, thread_id
+        await state.set_data({'thread_id': thread_id})
+        await state.update_data({'characteristic': characteristic})
+    return thread_id, characteristic
 
 
 # прием голосового сообщения и преобразование его в текст и отправка
@@ -86,113 +86,24 @@ async def def_get_text_to_audio(message: types.Message, answer: str):
 @user_router.message(CommandStart())
 async def start_cmd(message: types.Message, state: FSMContext):
     await message.answer(f'Привет {message.from_user.first_name}!\n'
-                         f'Вас приветствует голосовой помощник!\n'
-                         f'Назовите тему диалога в голосовом сообщении!\n'
-                         f'Например, магазины')
+                         f'Вас приветствует умный помощник!\n'
+                         f'Задайте вопрос в голосовом виде!')
 
-    # создаю ассистента и процесс для данного пользователя
-    assistant_id, thread_id = await def_create_assistant()
+    # # создаю ассистента
+    # assistant_id = await def_create_assistant()
+    # print(assistant_id)
+
+    # создаю процесс для данного пользователя
+    thread_id = await def_create_thread()
 
     # помещаю в state  для доступа в других обработчиках
-    await state.set_data({'assistant_id': assistant_id})
-    await state.update_data({'thread_id': thread_id})
-
-    await state.set_state(Allstate.state_new_theme)
-
-
-# пришла новая тема для диалога
-@user_router.message(Allstate.state_new_theme, F.voice)
-async def def_get_audio_new_theme(message: types.Message, bot: Bot, state: FSMContext, session: AsyncSession):
-    # прием голосового сообщения и преобразование его в текст и отправка текста
-    theme = await def_get_audio_to_text(message, bot)
-
-    # проверка на дубликат
-    result = await orm_get_theme(session, message.from_user.id, theme)
-    if result:
-        # отправляю на преобразование ИИ из текста в файл голосом и отправка
-        await def_get_text_to_audio(message, f'Такая тема уже существует. Выберите другую')
-        return
-
-    # проверка запущенного ассистента, если нет - создает
-    await def_control_active_assistant(state)
-    # создаю новый процесс
-    thread = await def_create_thread()
-    # помещаю в state  для доступа в других обработчиках
-    await state.update_data({'thread_id': thread.id})
-    await state.update_data({'theme': theme})
-
-    # переход в состояние ожидания описание темы
-    await state.set_state(Allstate.state_new_characteristic)
-
-    # отправляю на преобразование ИИ из текста в файл голосом и отправка
-    await def_get_text_to_audio(message, f'Озвучьте дополнительную информацию по теме: {theme}, '
-                                         f'например молотки, гвозди, рубашки')
-
-
-# пришли новые данные для новой темы диалога
-@user_router.message(Allstate.state_new_characteristic, F.voice)
-async def def_get_new_char_theme(message: types.Message, bot: Bot, state: FSMContext, session: AsyncSession):
-    # прием голосового сообщения и преобразование его в текст и отправка текста
-    description = await def_get_audio_to_text(message, bot)
-    state_data = await state.get_data()
-    theme = state_data["theme"]
-
-    # прописываю шаблонное задание для ИИ
-    content_system = f"Помощник, создай instructions for Assistant Open AI для темы {theme} по представленным данным"
-
-    # сообщение об ожидании
-    message_wait = await message.answer('Ожидайте ответ...')
-    # валидация характеристик
-    characteristic = await save_value(content_system, description)
-    # удаляю сообщение об ожидании
-    await message_wait.delete()
-
-    if characteristic:
-        # получены инструкции для последующего общения по теме
-        # помещаю в state  для доступа в других обработчиках
-        await state.update_data({'characteristic': characteristic})
-
-        # сохраняю в БД
-        await orm_add_theme(session=session,
-                            telegram_id=message.from_user.id,
-                            assistant_id=state_data['assistant_id'],
-                            thread_id=state_data['thread_id'],
-                            name_theme=theme,
-                            characteristic=characteristic
-                            )
-
-        # отправляю на преобразование ИИ из текста в файл голосом и отправка
-        await def_get_text_to_audio(message, f'Озвучьте ваш вопрос по теме: {theme}')
-
-        # обнуляю состояние
-        await state.set_state(state=None)
-    else:
-        # характеристики не прошли валидацию
-        await def_get_text_to_audio(message, f'Информация по теме {theme} не принята, попробуйте еще раз')
-
-
-# тема для диалога выбрана
-@user_router.message(Allstate.state_choice_theme, F.voice)
-async def def_get_choice_theme(message: types.Message, bot: Bot, state: FSMContext, session: AsyncSession):
-    # прием голосового сообщения и преобразование его в текст и отправка подтверждения
-    theme = await def_get_audio_to_text(message, bot)
-
-    result = await orm_get_theme(session, message.from_user.id, theme)
-    if result:
-        # помещаю в state  для доступа в других обработчиках
-        await state.update_data({'thread_id': result.thread_id})
-        # отправляю на преобразование ИИ из текста в файл голосом и отправка
-        await def_get_text_to_audio(message, f'Озвучьте ваш вопрос по теме: {theme}')
-    else:
-        await def_get_text_to_audio(message, 'Тема не найдена, вы в текущем диалоге')
-
-    # обнуляю состояние
-    await state.set_state(state=None)
+    await state.set_data({'thread_id': thread_id})
+    await state.update_data({'characteristic': ''})
 
 
 # прием сообщения в диалоге
 @user_router.message(F.voice)
-async def def_get_audio(message: types.Message, bot: Bot, state: FSMContext):
+async def def_get_audio(message: types.Message, bot: Bot, state: FSMContext, session: AsyncSession):
     # прием голосового сообщения и преобразование его в текст и отправка подтверждения
     question = await def_get_audio_to_text(message, bot)
 
@@ -201,59 +112,18 @@ async def def_get_audio(message: types.Message, bot: Bot, state: FSMContext):
     message_wait = await message.answer('Ожидайте ответ...')
 
     # проверка запущенного ассистента
-    assistant_id, thread_id = await def_control_active_assistant(state)
-
-    state_data = await state.get_data()
+    thread_id, characteristic = await def_control_active_thread(state, session, message.from_user.id)
 
     # отправляю вопрос в ИИ
-    # в вопросе указываю тему поскольку инструкции (state_data["characteristic"]) пока не работают
-    question = f'Мне нужен ответ на вопрос {question} по теме: {state_data["theme"]}'
-    answer = await def_openai_api_question(assistant_id, thread_id, question, state_data["characteristic"])
+    answer = await def_openai_api_question(thread_id, question, characteristic)
 
     # удаляю сообщение об ожидании
     await message_wait.delete()
-    # ответ ИИ
-    if not answer:
-        answer = 'Ответ не определен'
-    # await message.answer(answer)
+
+    await message.answer(answer)
+
     # отправляю на преобразование ИИ из текста в файл голосом и отправка
-    await def_get_text_to_audio(message, answer)
-
-
-# создаю запрос на новую тему
-@user_router.message(Command('new_dialog'))
-async def new_dialog_cmd(message: types.Message, state: FSMContext):
-    await def_get_text_to_audio(message, 'Назовите новую тему диалога!'
-                                         'Например, магазины')
-    await state.set_state(Allstate.state_new_theme)
-
-
-# выбор тем из базы
-@user_router.message(Command('theme_dialog'))
-async def themes_dialog_cmd(message: types.Message, state: FSMContext, session: AsyncSession):
-    themes = 'Назовите одну из озвученных тем'
-    # данные из БД по этому пользователю
-    result = await orm_get_themes(session, message.from_user.id)
-    if result:
-        for theme in result:
-            # заполняю сообщение всеми темами
-            themes += ' ' + theme.name_theme
-        # преобразую в голос и отправляю
-        await def_get_text_to_audio(message, themes)
-
-        await state.set_state(Allstate.state_choice_theme)
-    else:
-        # темы отсутствуют создать новую
-        await new_dialog_cmd(message, state)
-
-
-# удаление текущей темы
-@user_router.message(Command('delete_dialog'))
-async def delete_dialog_cmd(message: types.Message, state: FSMContext, session: AsyncSession):
-    state_data = await state.get_data()
-    if state_data:
-        await orm_delete_theme(session, state_data['thread_id'])
-    await themes_dialog_cmd(message, state, session)
+    # await def_get_text_to_audio(message, answer)
 
 
 @user_router.message(Command('about'))
