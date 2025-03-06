@@ -1,7 +1,7 @@
-import asyncio
+import json
 
 from pathlib import Path
-# from pydantic import BaseModel
+from pydantic import BaseModel
 
 import config
 
@@ -28,32 +28,30 @@ async def def_openai_api_voice_in_text(audio_filename: str):
 # создаю ассистента
 async def def_create_assistant():
     assistant = await client_async.beta.assistants.create(
-        instructions="Вы лучший собеседник на любую тему разговора. "
-                     "Предлагайте темы разговоров. "
-                     "Используйте предоставленную функцию для определения ценностей пользователя наводящими вопросами.",
+        instructions="Вы бот погоды. Используйте функции для ответа на вопросы.",
         model="gpt-4o",
         tools=[
             {
                 "type": "function",
                 "function": {
-                    "name": "save_value",
-                    "description": "Дать характеристику пользователя из разговора",
+                    "name": "get_current_temperature",
+                    "description": "Получите температуру для определенного местоположения",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "temper": {
+                            "location": {
                                 "type": "string",
-                                "description": "Черты характера, например: вежливость, доброта, лживость, раздражительность"
+                                "description": "Город, например, Казань"
                             },
-                            "interests": {
+                            "unit": {
                                 "type": "string",
-                                "description": "Чем интересуется?"
+                                "enum": ["Цельсий", "Фаренгейт"],
+                                "description": "Единица измерения температуры, которую нужно использовать. "
+                                               "Определите это по местоположению пользователя."
                             }
                         },
-                        "required": ["temper", "interests"],
-                        "additionalProperties": False
-                    },
-                    "strict": True
+                        "required": ["location", "unit"]
+                    }
                 }
             }
         ]
@@ -68,7 +66,7 @@ async def def_create_thread():
 
 
 # ИИ отвечает на вопрос
-async def def_openai_api_question(thread_id: str, question: str, characteristic: str):
+async def def_openai_api_question(thread_id: str, question: str):
     # добавляю вопрос в процесс
     await client_async.beta.threads.messages.create(
         thread_id=thread_id,
@@ -77,59 +75,72 @@ async def def_openai_api_question(thread_id: str, question: str, characteristic:
     )
     # запуск
     run = await client_async.beta.threads.runs.create_and_poll(thread_id=thread_id,
-                                                               assistant_id=config.settings.ASSISTANT_ID)
+                                                               assistant_id=config.settings.ASSISTANT_ID
+                                                               )
 
     # Пришел ответ
-    # if run.status == 'completed':
-    #     messages = await client_async.beta.threads.messages.list(thread_id)
-    #     message_content = messages.data[0].content[0].text.value
-    #     return message_content
-    # return
-
     if run.status == 'completed':
-        messages = await client_async.beta.threads.messages.list(thread_id)
-        print(messages)
-    else:
-        print(run.status)
-        return
-
-    # while not run.required_action:
-    #     await asyncio.sleep(1)
-    #     print("Checking again...\n")
-    #     run = await client_async.beta.threads.runs.retrieve(
-    #         thread_id=thread_id,
-    #         run_id=run.id
-    #     )
-
-    tool_outputs = []
-    # Loop through each tool in the required action section
-    for tool in run.required_action.submit_tool_outputs.tool_calls:
-        if tool.function.name == "save_value":
-            tool_outputs.append({
-                "tool_call_id": tool.id,
-                "output": "57"
-            })
-
-    # Submit all tool outputs at once after collecting them in a list
-    if tool_outputs:
         try:
-            run = await client_async.beta.threads.runs.submit_tool_outputs_and_poll(
-                thread_id=thread_id,
-                run_id=run.id,
-                tool_outputs=tool_outputs
-            )
-            print("Tool outputs submitted successfully.")
+            messages = await client_async.beta.threads.messages.list(thread_id)
+            message_content = messages.data[0].content[0].text.value
+            return message_content, None
         except Exception as e:
-            print("Failed to submit tool outputs:", e)
-    else:
-        print("No tool outputs to submit.")
+            print(f'Failed to get messages: {e}')
+            return 'Ошибка обработки', None
 
-    if run.status == 'completed':
-        messages = await client_async.beta.threads.messages.list(thread_id=thread_id)
-        print(messages)
+    elif run.status == 'requires_action':
+        try:
+            tool_outputs = []
+            for tool_call in run.required_action.submit_tool_outputs.tool_calls:
+                tool_outputs.append({"tool_call_id": tool_call.id, "output": "success"})
+
+            tool_call = run.required_action.submit_tool_outputs.tool_calls[0]
+            name = tool_call.function.name
+            arguments = json.loads(tool_call.function.arguments)
+
+            try:
+                run = await client_async.beta.threads.runs.submit_tool_outputs_and_poll(
+                    thread_id=thread_id,
+                    run_id=run.id,
+                    tool_outputs=tool_outputs
+                )
+            except Exception as e:
+                print(f'Failed to submit tool outputs: {e}')
+                return 'Ошибка обработки', None
+
+            if name == 'get_current_temperature':
+                return 'get_current_temperature', arguments
+            else:
+                print(f'Unknown tool name: {name}')
+                return 'Ошибка обработки', None
+
+        except Exception as e:
+            print(f'Failed to submit tool outputs: {e}')
+            return 'Ошибка обработки', None
     else:
-        print(run.status)
-    return messages.data[0].content[0].text.value
+        print(f'Unexpected run status: {run.status}')
+        return 'Ошибка обработки', None
+
+
+class ContentValidation(BaseModel):
+    location: str
+    unit: str
+    validation: bool
+
+
+async def def_completions_validation(question, arguments):
+    completion = await client_async.beta.chat.completions.parse(
+        model="gpt-4o-2024-08-06",
+        messages=[
+            {"role": "system", "content":
+                f"Определи город, единицу измерения температуры  и согласно локации."
+                f"Проверь  на соответствие  город с {arguments['location']} и единицу измерения с {arguments['unit']}"},
+            {"role": "user", "content": question}
+        ],
+        response_format=ContentValidation,
+    )
+    compliance = completion.choices[0].message.parsed
+    return compliance.validation
 
 
 # Модуль преобразования ИИ из текста в файл голосом

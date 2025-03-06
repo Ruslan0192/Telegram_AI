@@ -19,24 +19,20 @@ async def def_control_active_thread(state: FSMContext, session: AsyncSession, te
     state_data = await state.get_data()
     if state_data:
         thread_id = state_data['thread_id']
-        characteristic = state_data['characteristic']
     else:
         # читаю данные из БД
         result = await orm_get_user(session, telegram_id)
 
         if result:
             thread_id = result.thread_id
-            characteristic = result.characteristic
         else:
             # у этого пользователя не было потока
             # процесс для данного пользователя
             thread_id = await def_create_thread()
-            characteristic = ''
 
         # помещаю в state  для доступа в других обработчиках
         await state.set_data({'thread_id': thread_id})
-        await state.update_data({'characteristic': characteristic})
-    return thread_id, characteristic
+    return thread_id
 
 
 # прием голосового сообщения и преобразование его в текст и отправка
@@ -86,8 +82,8 @@ async def def_get_text_to_audio(message: types.Message, answer: str):
 @user_router.message(CommandStart())
 async def start_cmd(message: types.Message, state: FSMContext):
     await message.answer(f'Привет {message.from_user.first_name}!\n'
-                         f'Вас приветствует умный помощник!\n'
-                         f'Задайте вопрос в голосовом виде!')
+                         f'Вас приветствует бот погоды!\n'
+                         f'Задайте вопрос в голосовом виде о погоде в интересующем вас городе!')
 
     # # создаю ассистента
     # assistant_id = await def_create_assistant()
@@ -98,7 +94,6 @@ async def start_cmd(message: types.Message, state: FSMContext):
 
     # помещаю в state  для доступа в других обработчиках
     await state.set_data({'thread_id': thread_id})
-    await state.update_data({'characteristic': ''})
 
 
 # прием сообщения в диалоге
@@ -112,10 +107,22 @@ async def def_get_audio(message: types.Message, bot: Bot, state: FSMContext, ses
     message_wait = await message.answer('Ожидайте ответ...')
 
     # проверка запущенного ассистента
-    thread_id, characteristic = await def_control_active_thread(state, session, message.from_user.id)
+    thread_id = await def_control_active_thread(state, session, message.from_user.id)
 
     # отправляю вопрос в ИИ
-    answer = await def_openai_api_question(thread_id, question, characteristic)
+    answer, arguments = await def_openai_api_question(thread_id, question)
+
+    if arguments:
+        # ценности определены, проверяю на соответствие
+        if await def_completions_validation(question, arguments):
+            # запись в БД
+            await orm_add_theme(session=session,
+                                thread_id=thread_id,
+                                telegram_id=message.from_user.id,
+                                location=arguments['location'],
+                                unit=arguments['unit'])
+        else:
+            answer = 'Ценности не прошли валидацию'
 
     # удаляю сообщение об ожидании
     await message_wait.delete()

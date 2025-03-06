@@ -7,16 +7,18 @@ from database.models import *
 async def orm_add_theme(session: AsyncSession,
                         telegram_id: int,
                         thread_id: str,
-                        characteristic: str
+                        location: str,
+                        unit: str
                         ):
     if await orm_get_user(session, telegram_id):
         # поток у этого пользователя уже есть
-        return
+        await orm_change_characteristic(session, telegram_id, thread_id, location, unit)
     # записываю новую тему
     obj = User(
         telegram_id=telegram_id,
         thread_id=thread_id,
-        characteristic=characteristic
+        location=location,
+        unit=unit
     )
     session.add(obj)
     await session.commit()
@@ -29,8 +31,8 @@ async def orm_get_user(session: AsyncSession, telegram_id: int):
     return result.scalar()
 
 
-async def orm_change_characteristic(session: AsyncSession, telegram_id: int, characteristic: str):
+async def orm_change_characteristic(session: AsyncSession, telegram_id: int, thread_id: str, location: str, unit: str):
     query = update(User).where(User.telegram_id == telegram_id).\
-        values(characteristic=characteristic)
+        values(thread_id=thread_id, location=location, unit=unit)
     await session.execute(query)
     await session.commit()
