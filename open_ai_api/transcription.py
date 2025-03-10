@@ -28,29 +28,23 @@ async def def_openai_api_voice_in_text(audio_filename: str):
 # создаю ассистента
 async def def_create_assistant():
     assistant = await client_async.beta.assistants.create(
-        instructions="Вы бот погоды. Используйте функции для ответа на вопросы.",
+        instructions="Вы бот подбора професии. Используйте функцию для определения ее аргументов при ответе на вопросы.",
         model="gpt-4o",
         tools=[
             {
                 "type": "function",
                 "function": {
-                    "name": "get_current_temperature",
-                    "description": "Получите температуру для определенного местоположения",
+                    "name": "get_values",
+                    "description": "Определите качества/ценности человека для выбранной профессии",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "location": {
+                            "values_human": {
                                 "type": "string",
-                                "description": "Город, например, Казань"
+                                "description": "Ценности, например аналитический склад ума, усидчивость"
                             },
-                            "unit": {
-                                "type": "string",
-                                "enum": ["Цельсий", "Фаренгейт"],
-                                "description": "Единица измерения температуры, которую нужно использовать. "
-                                               "Определите это по местоположению пользователя."
-                            }
                         },
-                        "required": ["location", "unit"]
+                        "required": ["values"]
                     }
                 }
             }
@@ -108,8 +102,8 @@ async def def_openai_api_question(thread_id: str, question: str):
                 print(f'Failed to submit tool outputs: {e}')
                 return 'Ошибка обработки', None
 
-            if name == 'get_current_temperature':
-                return 'get_current_temperature', arguments
+            if name == 'get_values':
+                return 'get_values', arguments
             else:
                 print(f'Unknown tool name: {name}')
                 return 'Ошибка обработки', None
@@ -123,8 +117,7 @@ async def def_openai_api_question(thread_id: str, question: str):
 
 
 class ContentValidation(BaseModel):
-    location: str
-    unit: str
+    values: str
     validation: bool
 
 
@@ -133,8 +126,8 @@ async def def_completions_validation(question, arguments):
         model="gpt-4o-2024-08-06",
         messages=[
             {"role": "system", "content":
-                f"Определи город, единицу измерения температуры  и согласно локации."
-                f"Проверь  на соответствие  город с {arguments['location']} и единицу измерения с {arguments['unit']}"},
+                f"Определи ценности/качества человека по выбранной профессии."
+                f"Проверь  на соответствие  ценности с {arguments['values_human']}"},
             {"role": "user", "content": question}
         ],
         response_format=ContentValidation,

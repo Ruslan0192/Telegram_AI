@@ -82,8 +82,9 @@ async def def_get_text_to_audio(message: types.Message, answer: str):
 @user_router.message(CommandStart())
 async def start_cmd(message: types.Message, state: FSMContext):
     await message.answer(f'Привет {message.from_user.first_name}!\n'
-                         f'Вас приветствует бот погоды!\n'
-                         f'Задайте вопрос в голосовом виде о погоде в интересующем вас городе!')
+                         f'Вас приветствует бот подбора профессии!\n'
+                         f'В голосовом виде назовите профессию и '
+                         f'бот вам озвучит ценности/качества человека необходимые для нее!')
 
     # # создаю ассистента
     # assistant_id = await def_create_assistant()
@@ -119,8 +120,8 @@ async def def_get_audio(message: types.Message, bot: Bot, state: FSMContext, ses
             await orm_add_theme(session=session,
                                 thread_id=thread_id,
                                 telegram_id=message.from_user.id,
-                                location=arguments['location'],
-                                unit=arguments['unit'])
+                                values_human=arguments['values_human']
+                                )
         else:
             answer = 'Ценности не прошли валидацию'
 
