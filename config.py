@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     ASSISTANT_ID: str
     REDIS_URL: str
     DB_URL: str
+    AMPLITUDE_APIKEY: str
 
     model_config = SettingsConfigDict(env_file=".env")
 
