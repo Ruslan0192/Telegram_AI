@@ -1,7 +1,7 @@
 services:
   bot:
     build: .
-    command: python main.py
+    command: alembic upgrade head && python main.py
     env_file:
       - .env
     volumes:
