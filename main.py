@@ -14,13 +14,9 @@ from config import settings
 
 bot = Bot(settings.TOKEN_TG)
 
-storage = RedisStorage.from_url(
-    f'redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}',
-    key_builder=DefaultKeyBuilder(with_bot_id=True, with_destiny=True),
-)
-
-# redis_url = f'redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}?decode_responses=True'
-# storage = RedisStorage.from_url(redis_url)
+storage = RedisStorage.from_url(settings.REDIS_URL,
+                                key_builder=DefaultKeyBuilder(with_bot_id=True, with_destiny=True),
+                                )
 
 dp = Dispatcher(storage=storage)
 dp.include_router(user_router)

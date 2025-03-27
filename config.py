@@ -12,9 +12,7 @@ class Settings(BaseSettings):
     POSTGRES_HOST: str
     POSTGRES_PORT: str
 
-    REDIS_DB: str
-    REDIS_HOST: str
-    REDIS_PORT: str
+    REDIS_URL: str
 
     AMPLITUDE_APIKEY: str
 
