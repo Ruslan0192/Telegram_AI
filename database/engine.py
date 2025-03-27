@@ -2,9 +2,11 @@ from sqlalchemy import DateTime, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncAttrs, async_sessionmaker, create_async_engine
 
-import config
+from config import settings
 
-db_url = config.settings.DB_URL
+
+db_url = f'postgresql+asyncpg://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}' \
+         f'@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}'
 engine = create_async_engine(db_url, echo=True)
 
 session_maker = async_sessionmaker(bind=engine,

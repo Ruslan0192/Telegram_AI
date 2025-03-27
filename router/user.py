@@ -8,39 +8,20 @@ from aiogram.types import FSInputFile
 from database.orm_query import *
 from events.amplitude import def_event_api_client
 
-from open_ai_api.transcription import *
+from open_ai_api.transcription import def_create_thread, def_openai_api_voice_in_text, def_openai_api_text_in_voice, \
+    def_create_assistant, def_create_vector_assistant, def_openai_api_file_search
+
 from open_ai_api.vision import def_openai_vision
 
 user_router = Router()
 
-
-# проверка запущенного потока
-async def def_control_active_thread(state: FSMContext, session: AsyncSession, telegram_id: int):
-    # забираю id по ассистенту ИИ и процессу
-    state_data = await state.get_data()
-    if state_data:
-        thread_id = state_data['thread_id']
-    else:
-        # читаю данные из БД
-        result = await orm_get_user(session, telegram_id)
-
-        if result:
-            thread_id = result.thread_id
-        else:
-            # у этого пользователя не было потока
-            # процесс для данного пользователя
-            thread_id = await def_create_thread()
-
-        # помещаю в state  для доступа в других обработчиках
-        await state.set_data({'thread_id': thread_id})
-    return thread_id
 
 # прием голосового сообщения и преобразование его в текст и отправка
 async def def_get_audio_to_text(message: types.Message, bot: Bot):
     # сообщение об ожидании
     message_wait = await message.answer('Ожидайте ответ...')
 
-    # сохраняю голос. сообщение в файл
+    # Сохраняю голос. Сообщение в файл
     file_id = message.voice.file_id
     file = await bot.get_file(file_id)
     file_path = file.file_path
@@ -59,6 +40,35 @@ async def def_get_audio_to_text(message: types.Message, bot: Bot):
     # удаляю голосовой файл
     os.remove(file_on_disk)
     return text
+
+
+async def def_get_answer_assistant(message: types.Message, session: AsyncSession, state: FSMContext,
+                                   question: str):
+    # вопрос для ИИ
+    # сообщение об ожидании
+    message_wait = await message.answer('Ожидайте ответ...')
+
+    state_data = await state.get_data()
+    assistant_id = state_data['assistant_id']
+    thread_id = state_data['thread_id']
+
+    # отправляю вопрос в ИИ
+    answer, arguments = await def_openai_api_file_search(assistant_id, thread_id, question)
+
+    if arguments:
+        # запись в БД
+        for get_value, values_human in arguments.items():
+            # определены ценности, записываю
+            await orm_add_value(session=session,
+                                telegram_id=message.from_user.id,
+                                thread_id=thread_id,
+                                get_value=get_value,
+                                values_human=values_human
+                                )
+
+    # удаляю сообщение об ожидании
+    await message_wait.delete()
+    return answer
 
 
 # отправляю на преобразование ИИ из текста в файл голосом и отправка
@@ -80,31 +90,50 @@ async def def_get_text_to_audio(message: types.Message, answer: str):
 # ******************************************************************************
 # все хендлеры
 @user_router.message(CommandStart())
-async def start_cmd(message: types.Message, state: FSMContext):
-    # оправка уведомления о действиях рользователя
-    def_event_api_client(message.from_user.id,
-                         'зарегистрировался',
-                         {'first_name': message.from_user.first_name})
+async def start_cmd(message: types.Message, state: FSMContext, session: AsyncSession):
+    # оправка уведомления о действиях пользователя
+    telegram_id = message.from_user.id
+    user_name = message.from_user.first_name
 
-    await message.answer(f'Привет {message.from_user.first_name}!\n'
+    await message.answer(f'Привет {user_name}!\n'
                          f'Вас приветствует бот подбора профессии и анализа настроения по фото!\n'
-                         f'В голосовом виде назовите профессию или отправьте фото человека'
+                         f'Вы можете задавать вопросы в голосовом или текстовом видах.\n'
+                         f'Также бот принимает фото человека для расшифровки его состояния'
                          )
 
-    # # создаю ассистента
-    # assistant_id = await def_create_assistant()
-    # print(assistant_id)
+    user = await orm_get_user(session, telegram_id)
+    if user:
+        assistant_id = user.assistant_id
+    else:
+        # в базе этого пользователя не было, создаю запись с ассистентом
+        assistant_id = await def_create_assistant()
+        await orm_add_user(session, telegram_id, assistant_id)
+        def_event_api_client(telegram_id,
+                             'зарегистрировался',
+                             {'first_name': user_name})
 
-    # создаю процесс для данного пользователя
-    thread_id = await def_create_thread()
+    message_wait = await message.answer('Подключаю помощника...')
 
-    # помещаю в state  для доступа в других обработчиках
-    await state.set_data({'thread_id': thread_id})
+    # обновляю ассистента для работы с файлами
+    await def_create_vector_assistant(assistant_id)
+
+    # процесс для данного пользователя
+    thread_id = await def_create_thread('store_files/anxiety.docx')
+    def_event_api_client(telegram_id,
+                         'новая тема',
+                         {'first_name': user_name})
+
+    # помещаю в state для доступа в других обработчиках
+    await state.set_data({'assistant_id': assistant_id})
+    await state.update_data({'thread_id': thread_id})
+
+    # удаляю сообщение об ожидании
+    await message_wait.delete()
 
 
 @user_router.message(Command('about'))
 async def about_cmd(message: types.Message):
-    # оправка уведомления о действиях рользователя
+    # оправка уведомления о действиях пользователя
     def_event_api_client(message.from_user.id,
                          'посмотрел сведения о программе',
                          {'command': 'about'})
@@ -118,7 +147,7 @@ async def about_cmd(message: types.Message):
 # прием сообщения в диалоге
 @user_router.message(F.voice)
 async def def_get_audio(message: types.Message, bot: Bot, state: FSMContext, session: AsyncSession):
-    # оправка уведомления о действиях рользователя
+    # оправка уведомления о действиях пользователя
     def_event_api_client(message.from_user.id,
                          'отправил голосовое сообщение',
                          {'task': 'определять ценности для профессии'})
@@ -127,40 +156,19 @@ async def def_get_audio(message: types.Message, bot: Bot, state: FSMContext, ses
     question = await def_get_audio_to_text(message, bot)
 
     # вопрос для ИИ
-    # сообщение об ожидании
-    message_wait = await message.answer('Ожидайте ответ...')
+    answer = await def_get_answer_assistant(message, session, state, question)
 
-    # проверка запущенного ассистента
-    thread_id = await def_control_active_thread(state, session, message.from_user.id)
-
-    # отправляю вопрос в ИИ
-    answer, arguments = await def_openai_api_question(thread_id, question)
-
-    if arguments:
-        # ценности определены, проверяю на соответствие
-        if await def_completions_validation(question, arguments):
-            # запись в БД
-            await orm_add_theme(session=session,
-                                thread_id=thread_id,
-                                telegram_id=message.from_user.id,
-                                values_human=arguments['values_human']
-                                )
-        else:
-            answer = 'Ценности не прошли валидацию'
-
-    # удаляю сообщение об ожидании
-    await message_wait.delete()
-
-    await message.answer(answer)
+    # await message.answer(answer, parse_mode='Markdown')
 
     # отправляю на преобразование ИИ из текста в файл голосом и отправка
-    # await def_get_text_to_audio(message, answer)
+    await def_get_text_to_audio(message, answer)
 
 
 # прием фото
+# **************************************************************************************
 @user_router.message(F.photo)
-async def def_get_photo(message: types.Message, bot: Bot, state: FSMContext, session: AsyncSession):
-    # оправка уведомления о действиях рользователя
+async def def_get_photo(message: types.Message, bot: Bot):
+    # оправка уведомления о действиях пользователя
     def_event_api_client(message.from_user.id,
                          'отправил фото',
                          {'task': 'определять настроение пользователя'})
@@ -189,13 +197,19 @@ async def def_get_photo(message: types.Message, bot: Bot, state: FSMContext, ses
     os.remove(file_on_disk)
 
 
+# прием текста
+# **************************************************************************************
 @user_router.message()
-async def def_any_message(message: types.Message):
-    # оправка уведомления о действиях рользователя
+async def def_any_message(message: types.Message, session: AsyncSession, state: FSMContext):
+    # оправка уведомления о действиях пользователя
     def_event_api_client(message.from_user.id,
                          'вводит текст',
-                         {'task': 'ошибка действий'})
+                         {'task': 'определять ценности для профессии'})
+
+    # вопрос для ИИ
+    answer = await def_get_answer_assistant(message, session, state, message.text)
+
+    await message.answer(answer, parse_mode='Markdown')
 
     # обработка ошибок
-    await message.answer('Запишите сообщение в голосовом виде или отправьте фото!')
-
+    # await message.answer('Запишите сообщение в голосовом виде или отправьте фото!')

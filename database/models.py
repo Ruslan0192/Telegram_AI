@@ -4,9 +4,16 @@ from sqlalchemy.orm import Mapped, mapped_column
 from database.engine import Base
 
 
-class User(Base):
-    __tablename__ = 'Users'
+class Users(Base):
+    __tablename__ = 'user'
     telegram_id: Mapped[int] = mapped_column(BigInteger)
-    thread_id: Mapped[str] = mapped_column(String(50),  nullable=False)
-    values_human: Mapped[str] = mapped_column(Text, default='')
+    assistant_id: Mapped[str] = mapped_column(String(50))
+
+
+class Values(Base):
+    __tablename__ = 'value'
+    telegram_id: Mapped[int] = mapped_column(BigInteger)
+    thread_id: Mapped[str] = mapped_column(String(50))
+    get_value: Mapped[str] = mapped_column(Text)
+    values_human: Mapped[str] = mapped_column(Text)
 

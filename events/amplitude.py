@@ -31,6 +31,5 @@ def def_event_api_client_amplitude(telegram_id: int, event_type: str, event_prop
 
 
 def def_event_api_client(telegram_id: int, event_type: str, event_properties: dict):
-    executor.submit(def_event_api_client_amplitude, telegram_id, event_type, event_properties)
-
-
+    # executor.submit(def_event_api_client_amplitude, telegram_id, event_type, event_properties)
+    pass

@@ -1,9 +1,10 @@
 import base64
 
-from openai import OpenAI
-import config
+from openai import AsyncOpenAI
 
-client = OpenAI(api_key=config.settings.OPENAI_APIKEY)
+from config import settings
+
+client_async = AsyncOpenAI(api_key=settings.OPENAI_APIKEY)
 
 
 async def def_openai_vision(image_path: str):
@@ -11,7 +12,7 @@ async def def_openai_vision(image_path: str):
     with open(image_path, "rb") as image_file:
         base64_image = base64.b64encode(image_file.read()).decode("utf-8")
 
-    completion = client.chat.completions.create(
+    completion = await client_async.chat.completions.create(
         model="gpt-4o",
         messages=[
             {
